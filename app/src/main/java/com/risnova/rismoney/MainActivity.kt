@@ -1,3 +1,4 @@
+
 package com.risnova.rismoney
 
 import android.content.Context
@@ -23,6 +24,8 @@ import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
@@ -31,7 +34,8 @@ data class MoneyEntry(
     val title: String,
     val amount: Double,
     val type: String,
-    val date: Long
+    val date: Long,
+    val category: String = "ทั่วไป"
 )
 
 class MainActivity : ComponentActivity() {
@@ -42,15 +46,23 @@ class MainActivity : ComponentActivity() {
 }
 
 private fun money(value: Double): String =
-    NumberFormat.getNumberInstance(Locale("th", "TH")).format(value) + " ฿"
+    NumberFormat.getNumberInstance(Locale("th", "TH"))
+        .format(value) + " ฿"
+
+private val purple = Color(0xFF9B72FF)
+private val green = Color(0xFF35C98A)
+private val red = Color(0xFFFF7185)
 
 @Composable
 fun RisMoneyApp() {
     val context = LocalContext.current
     var entries by remember { mutableStateOf(loadEntries(context)) }
     var dark by remember { mutableStateOf(true) }
-    var showAdd by remember { mutableStateOf(false) }
-    var selectedType by remember { mutableStateOf("รายจ่าย") }
+    var showDialog by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<MoneyEntry?>(null) }
+    var search by remember { mutableStateOf("") }
+    var filter by remember { mutableStateOf("ทั้งหมด") }
+    var page by remember { mutableStateOf("หน้าหลัก") }
 
     val income = entries.filter { it.type == "รายรับ" }.sumOf { it.amount }
     val expense = entries.filter { it.type == "รายจ่าย" }.sumOf { it.amount }
@@ -60,88 +72,268 @@ fun RisMoneyApp() {
     val panel = if (dark) Color(0xFF171A28) else Color.White
     val fg = if (dark) Color(0xFFF4F5FF) else Color(0xFF171827)
     val muted = if (dark) Color(0xFF9DA3B8) else Color(0xFF6C7182)
-    val accent = Color(0xFF9B72FF)
 
-    MaterialTheme(colorScheme = if (dark) darkColorScheme(
-        primary = accent, background = bg, surface = panel, onSurface = fg
-    ) else lightColorScheme(primary = accent, background = bg, surface = panel, onSurface = fg)) {
-        Surface(modifier = Modifier.fillMaxSize(), color = bg) {
-            Column(Modifier.fillMaxSize().padding(18.dp)) {
+    MaterialTheme(
+        colorScheme = if (dark) darkColorScheme(
+            primary = purple,
+            background = bg,
+            surface = panel,
+            onSurface = fg
+        ) else lightColorScheme(
+            primary = purple,
+            background = bg,
+            surface = panel,
+            onSurface = fg
+        )
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = bg
+        ) {
+            Column(
+                Modifier.fillMaxSize().padding(16.dp)
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("RIS MONEY", color = accent, fontSize = 25.sp, fontWeight = FontWeight.Black)
-                        Text("จัดการเงินของคุณ", color = muted, fontSize = 13.sp)
+                        Text(
+                            "RIS MONEY",
+                            color = purple,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            "จัดการเงินของคุณ",
+                            color = muted,
+                            fontSize = 13.sp
+                        )
                     }
                     TextButton(onClick = { dark = !dark }) {
-                        Text(if (dark) "☀ โหมดสว่าง" else "☾ โหมดมืด", color = fg)
+                        Text(
+                            if (dark) "☀ สว่าง" else "☾ มืด",
+                            color = fg
+                        )
                     }
                 }
-                Spacer(Modifier.height(18.dp))
+
+                Spacer(Modifier.height(16.dp))
+
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = panel),
+                    colors = CardDefaults.cardColors(
+                        containerColor = panel
+                    ),
                     shape = RoundedCornerShape(22.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(Modifier.padding(20.dp)) {
-                        Text("ยอดคงเหลือสุทธิ", color = muted, fontSize = 14.sp)
-                        Spacer(Modifier.height(5.dp))
-                        Text(money(balance), color = fg, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(18.dp))
-                        Row(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("ยอดคงเหลือสุทธิ", color = muted)
+                        Text(
+                            money(balance),
+                            color = fg,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Row {
                             Column(Modifier.weight(1f)) {
-                                Text("รายรับทั้งหมด", color = muted, fontSize = 12.sp)
-                                Text("+ ${money(income)}", color = Color(0xFF35C98A), fontWeight = FontWeight.SemiBold)
+                                Text("รายรับทั้งหมด", color = muted)
+                                Text(
+                                    "+ ${money(income)}",
+                                    color = green,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                             Column(Modifier.weight(1f)) {
-                                Text("รายจ่ายทั้งหมด", color = muted, fontSize = 12.sp)
-                                Text("- ${money(expense)}", color = Color(0xFFFF7185), fontWeight = FontWeight.SemiBold)
+                                Text("รายจ่ายทั้งหมด", color = muted)
+                                Text(
+                                    "- ${money(expense)}",
+                                    color = red,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = { showAdd = true },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = accent),
-                    shape = RoundedCornerShape(15.dp)
-                ) { Text("+ เพิ่มรายการ", fontWeight = FontWeight.Bold, fontSize = 16.sp) }
-                Spacer(Modifier.height(18.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("รายการล่าสุด", color = fg, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.weight(1f))
-                    Text("${entries.size} รายการ", color = muted, fontSize = 12.sp)
+
+                Spacer(Modifier.height(12.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("หน้าหลัก", "ประวัติ", "กราฟ").forEach { item ->
+                        FilterChip(
+                            selected = page == item,
+                            onClick = { page = item },
+                            label = { Text(item) }
+                        )
+                    }
                 }
-                Spacer(Modifier.height(8.dp))
-                if (entries.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("ยังไม่มีรายการ\nกด “เพิ่มรายการ” เพื่อเริ่มบันทึก", color = muted)
+
+                if (page == "กราฟ") {
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "สรุปรายรับและรายจ่าย",
+                        color = fg,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = panel)
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Text("รายรับ", color = green)
+                            Text(money(income), color = fg)
+                            val maxValue = maxOf(income, expense, 1.0)
+                            LinearProgressIndicator(
+                                progress = (income / maxValue).toFloat(),
+                                modifier = Modifier.fillMaxWidth(),
+                                color = green
+                            )
+                            Text("รายจ่าย", color = red)
+                            Text(money(expense), color = fg)
+                            LinearProgressIndicator(
+                                progress = (expense / maxValue).toFloat(),
+                                modifier = Modifier.fillMaxWidth(),
+                                color = red
+                            )
+                            Divider()
+                            Text(
+                                "จำนวนรายการทั้งหมด: ${entries.size}",
+                                color = muted
+                            )
+                        }
                     }
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(entries.sortedByDescending { it.date }, key = { it.id }) { entry ->
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = panel),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                    Spacer(Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = search,
+                        onValueChange = { search = it },
+                        label = { Text("ค้นหารายการ") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("ทั้งหมด", "รายรับ", "รายจ่าย").forEach { item ->
+                            FilterChip(
+                                selected = filter == item,
+                                onClick = { filter = item },
+                                label = { Text(item) }
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    Button(
+                        onClick = {
+                            editing = null
+                            showDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = purple
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("+ เพิ่มรายการ", fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Text(
+                        if (page == "ประวัติ") "ประวัติทั้งหมด"
+                        else "รายการล่าสุด",
+                        color = fg,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    val shown = entries
+                        .filter {
+                            (filter == "ทั้งหมด" || it.type == filter) &&
+                            (it.title.contains(search, ignoreCase = true) ||
+                             it.category.contains(search, ignoreCase = true))
+                        }
+                        .sortedByDescending { it.date }
+
+                    if (shown.isEmpty()) {
+                        Box(
+                            Modifier.fillMaxWidth().weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("ยังไม่มีรายการ", color = muted)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(shown, key = { it.id }) { entry ->
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = panel
+                                    ),
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(entry.title, color = fg, fontWeight = FontWeight.SemiBold)
-                                        Text(entry.type, color = muted, fontSize = 12.sp)
+                                    Column(Modifier.padding(12.dp)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    entry.title,
+                                                    color = fg,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    "${entry.type} • ${entry.category}",
+                                                    color = muted,
+                                                    fontSize = 12.sp
+                                                )
+                                                Text(
+                                                    SimpleDateFormat(
+                                                        "dd/MM/yyyy HH:mm",
+                                                        Locale.getDefault()
+                                                    ).format(Date(entry.date)),
+                                                    color = muted,
+                                                    fontSize = 11.sp
+                                                )
+                                            }
+                                            Text(
+                                                (if (entry.type == "รายรับ") "+" else "-") +
+                                                    money(entry.amount),
+                                                color = if (entry.type == "รายรับ") green else red,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End
+                                        ) {
+                                            TextButton(onClick = {
+                                                editing = entry
+                                                showDialog = true
+                                            }) {
+                                                Text("แก้ไข", color = purple)
+                                            }
+                                            TextButton(onClick = {
+                                                entries = entries.filterNot {
+                                                    it.id == entry.id
+                                                }
+                                                saveEntries(context, entries)
+                                            }) {
+                                                Text("ลบ", color = red)
+                                            }
+                                        }
                                     }
-                                    Text(
-                                        (if (entry.type == "รายรับ") "+" else "-") + money(entry.amount),
-                                        color = if (entry.type == "รายรับ") Color(0xFF35C98A) else Color(0xFFFF7185),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    TextButton(onClick = {
-                                        entries = entries.filterNot { it.id == entry.id }
-                                        saveEntries(context, entries)
-                                    }) { Text("ลบ", color = muted) }
                                 }
                             }
                         }
@@ -151,24 +343,65 @@ fun RisMoneyApp() {
         }
     }
 
-    if (showAdd) {
-        var title by remember { mutableStateOf("") }
-        var amountText by remember { mutableStateOf("") }
-        var type by remember { mutableStateOf(selectedType) }
+    if (showDialog) {
+        var title by remember(editing) {
+            mutableStateOf(editing?.title ?: "")
+        }
+        var amountText by remember(editing) {
+            mutableStateOf(editing?.amount?.toString() ?: "")
+        }
+        var type by remember(editing) {
+            mutableStateOf(editing?.type ?: "รายจ่าย")
+        }
+        var category by remember(editing) {
+            mutableStateOf(editing?.category ?: "ทั่วไป")
+        }
+
         AlertDialog(
-            onDismissRequest = { showAdd = false },
-            title = { Text("เพิ่มรายการ") },
+            onDismissRequest = { showDialog = false },
+            title = {
+                Text(if (editing == null) "เพิ่มรายการ" else "แก้ไขรายการ")
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("ชื่อรายการ") }, singleLine = true)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     OutlinedTextField(
-                        value = amountText, onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text("จำนวนเงิน (บาท)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("ชื่อรายการ") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = {
+                            amountText = it.filter { c ->
+                                c.isDigit() || c == '.'
+                            }
+                        },
+                        label = { Text("จำนวนเงิน (บาท)") },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal
+                        ),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = category,
+                        onValueChange = { category = it },
+                        label = { Text("หมวดหมู่ เช่น อาหาร เดินทาง") },
                         singleLine = true
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = type == "รายรับ", onClick = { type = "รายรับ" }, label = { Text("รายรับ") })
-                        FilterChip(selected = type == "รายจ่าย", onClick = { type = "รายจ่าย" }, label = { Text("รายจ่าย") })
+                        FilterChip(
+                            selected = type == "รายรับ",
+                            onClick = { type = "รายรับ" },
+                            label = { Text("รายรับ") }
+                        )
+                        FilterChip(
+                            selected = type == "รายจ่าย",
+                            onClick = { type = "รายจ่าย" },
+                            label = { Text("รายจ่าย") }
+                        )
                     }
                 }
             },
@@ -176,37 +409,87 @@ fun RisMoneyApp() {
                 TextButton(onClick = {
                     val amount = amountText.toDoubleOrNull()
                     if (title.isNotBlank() && amount != null && amount > 0) {
-                        entries = entries + MoneyEntry(UUID.randomUUID().toString(), title.trim(), amount, type, System.currentTimeMillis())
+                        val updated = MoneyEntry(
+                            id = editing?.id ?: UUID.randomUUID().toString(),
+                            title = title.trim(),
+                            amount = amount,
+                            type = type,
+                            date = editing?.date ?: System.currentTimeMillis(),
+                            category = category.trim().ifBlank { "ทั่วไป" }
+                        )
+
+                        entries = if (editing == null) {
+                            entries + updated
+                        } else {
+                            entries.map {
+                                if (it.id == updated.id) updated else it
+                            }
+                        }
+
                         saveEntries(context, entries)
-                        selectedType = type
-                        showAdd = false
+                        showDialog = false
                     }
-                }) { Text("บันทึก") }
+                }) {
+                    Text("บันทึก")
+                }
             },
-            dismissButton = { TextButton(onClick = { showAdd = false }) { Text("ยกเลิก") } }
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("ยกเลิก")
+                }
+            }
         )
     }
 }
 
 private fun loadEntries(context: Context): List<MoneyEntry> {
     return try {
-        val raw = context.getSharedPreferences("ris_money", Context.MODE_PRIVATE).getString("entries", "[]") ?: "[]"
+        val raw = context.getSharedPreferences(
+            "ris_money",
+            Context.MODE_PRIVATE
+        ).getString("entries", "[]") ?: "[]"
+
         val array = JSONArray(raw)
+
         (0 until array.length()).map { i ->
             val o = array.getJSONObject(i)
-            MoneyEntry(o.getString("id"), o.getString("title"), o.getDouble("amount"), o.getString("type"), o.getLong("date"))
+            MoneyEntry(
+                id = o.getString("id"),
+                title = o.getString("title"),
+                amount = o.getDouble("amount"),
+                type = o.getString("type"),
+                date = o.getLong("date"),
+                category = if (o.has("category")) {
+                    o.getString("category")
+                } else {
+                    "ทั่วไป"
+                }
+            )
         }
-    } catch (_: Exception) { emptyList() }
+    } catch (_: Exception) {
+        emptyList()
+    }
 }
 
-private fun saveEntries(context: Context, entries: List<MoneyEntry>) {
+private fun saveEntries(
+    context: Context,
+    entries: List<MoneyEntry>
+) {
     val array = JSONArray()
+
     entries.forEach { e ->
         array.put(JSONObject().apply {
-            put("id", e.id); put("title", e.title); put("amount", e.amount)
-            put("type", e.type); put("date", e.date)
+            put("id", e.id)
+            put("title", e.title)
+            put("amount", e.amount)
+            put("type", e.type)
+            put("date", e.date)
+            put("category", e.category)
         })
     }
-    context.getSharedPreferences("ris_money", Context.MODE_PRIVATE)
-        .edit().putString("entries", array.toString()).apply()
+
+    context.getSharedPreferences(
+        "ris_money",
+        Context.MODE_PRIVATE
+    ).edit().putString("entries", array.toString()).apply()
 }
