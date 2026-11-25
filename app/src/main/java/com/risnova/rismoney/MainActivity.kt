@@ -1,6 +1,7 @@
 
 package com.risnova.rismoney
-
+import android.content.Intent
+import android.provider.Settings
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
@@ -192,6 +193,29 @@ fun RisMoneyApp() {
                         }
                         TextButton(onClick = { dark = !dark }) {
                             Text(if (dark) "☀ สว่าง" else "☾ มืด", color = fg)
+                        }
+                    }
+                }
+
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = panel),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                            Text("เชื่อมต่อธนาคาร", color = fg, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(6.dp))
+                            Text("เปิดสิทธิ์เพื่อให้ RIS MONEY ตรวจจับรายการแจ้งเตือนจากธนาคาร", color = muted, fontSize = 12.sp)
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("ตั้งค่าการเข้าถึงการแจ้งเตือน")
+                            }
                         }
                     }
                 }
