@@ -5,3 +5,6 @@ local.properties
 build-log.txt
 *.apk
 *.aab
+*.jks
+*.keystore
+key.properties
